@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SyllaboReader - Sauvegarde Cloud</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .syllable-card {
+            transition: all 0.3s ease;
+        }
+        .syllable-card.active {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+            transform: scale(1.05);
+        }
+        .recording-glow {
+            animation: glow 1.5s infinite;
+        }
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 5px rgba(239, 68, 68, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.8); }
+        }
+        .loader {
+            border-top-color: #3498db;
+            animation: spinner 1.5s linear infinite;
+        }
+        @keyframes spinner {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-900">
+
+    <div id="app" class="max-w-2xl mx-auto p-4 md:p-8">
+        
+        <!-- ÉCRAN 0 : CHARGEMENT / AUTH -->
+        <section id="screen-loading" class="flex flex-col items-center justify-center py-20">
+            <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4"></div>
+            <p class="text-slate-500">Connexion au service de sauvegarde...</p>
+        </section>
+
+        <!-- ÉCRAN 1 : SAISIE DE LA PHRASE -->
+        <section id="screen-input" class="hidden space-y-8">
+            <header class="text-center">
+                <h1 class="text-3xl font-bold text-blue-600">SyllaboReader</h1>
+                <p class="text-slate-500">Apprentissage par découpage syllabique</p>
+            </header>
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                <label class="block font-semibold text-slate-700">Entrez la phrase à travailler :</label>
+                <input type="text" id="phrase-input" placeholder="Ex: Le loup court dans la rue." 
+                    class="w-full p-4 border rounded-xl focus:ring-2 focus:ring-blue-400 outline-none text-lg">
+                
+                <button id="start-recording-session" disabled class="w-full bg-slate-100 text-slate-400 font-bold py-4 rounded-xl transition-all">
+                    Commencer l'enregistrement par syllabe
+                </button>
+            </div>
+
+            <!-- Liste des anciennes sessions -->
+            <div id="history-container" class="space-y-4">
+                <h2 class="font-bold text-slate-700">Vos enregistrements précédents :</h2>
+                <div id="history-list" class="space-y-2 text-sm">
+                    <!-- Sessions chargées ici -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ÉCRAN 2 : ENREGISTREMENT PAS À PAS -->
+        <section id="screen-record" class="hidden space-y-8 text-center">
+            <div class="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 space-y-6">
+                <div class="text-sm font-medium text-slate-400 uppercase tracking-widest">Syllabe actuelle</div>
+                <div id="current-syllable-display" class="text-6xl font-black text-blue-600 py-4">--</div>
+                
+                <div class="flex flex-col items-center gap-4">
+                    <div id="record-status-ui" class="hidden items-center gap-2 text-red-500 font-bold">
+                        <span class="w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
+                        ENREGISTREMENT...
+                    </div>
+
+                    <button id="mic-btn" class="w-24 h-24 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition-all">
+                        <svg id="mic-icon" class="w-10 h-10 fill-current" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+                        <svg id="stop-icon" class="hidden w-10 h-10 fill-current" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+                    </button>
+                    
+                    <p id="instruction-text" class="text-slate-500">Maintenez ou cliquez pour enregistrer</p>
+                </div>
+
+                <div class="pt-4 border-t flex justify-between items-center text-sm">
+                    <span id="progress-text" class="text-slate-400 font-bold">1 / 5</span>
+                    <div id="recording-done-icon" class="hidden text-green-500 flex items-center gap-1">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"></path></svg>
+                        Enregistré
+                    </div>
+                </div>
+            </div>
+
+            <button id="next-syllable-btn" disabled class="w-full bg-slate-200 text-slate-500 font-bold py-4 rounded-xl transition-all">
+                Syllabe suivante
+            </button>
+        </section>
+
+        <!-- ÉCRAN 3 : LECTURE FINALE -->
+        <section id="screen-play" class="hidden space-y-8">
+            <div class="flex justify-between items-center">
+                <button id="back-to-start" class="text-blue-600 font-medium flex items-center gap-1">
+                    ← Accueil
+                </button>
+                <div id="save-status" class="text-xs font-bold text-slate-400 italic">Sauvegarde automatique...</div>
+            </div>
+
+            <div class="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 text-center space-y-10">
+                <div id="syllables-grid" class="flex flex-wrap justify-center gap-3">
+                    <!-- Cases injectées ici -->
+                </div>
+
+                <div class="space-y-6 pt-6 border-t">
+                    <div class="flex flex-col items-center gap-2">
+                        <label class="text-sm font-medium text-slate-500">Vitesse : <span id="speed-display">1x</span></label>
+                        <input type="range" id="speed-range" min="0.5" max="2" step="0.1" value="1" class="w-full max-w-xs">
+                    </div>
+
+                    <button id="play-full-btn" class="w-20 h-20 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg transform active:scale-95 transition-all mx-auto">
+                        <svg class="w-8 h-8 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    </button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, doc, setDoc, query, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- FIREBASE CONFIG ---
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'syllabo-reader';
+
+        // --- ÉTATS ---
+        let user = null;
+        let currentSyllables = [];
+        let recordings = []; // Stocke les Blobs audio
+        let currentStep = 0;
+        let mediaRecorder;
+        let audioChunks = [];
+
+        // DOM Elements
+        const screens = {
+            loading: document.getElementById('screen-loading'),
+            input: document.getElementById('screen-input'),
+            record: document.getElementById('screen-record'),
+            play: document.getElementById('screen-play')
+        };
+        const phraseInput = document.getElementById('phrase-input');
+        const startBtn = document.getElementById('start-recording-session');
+        const curSyllableDisplay = document.getElementById('current-syllable-display');
+        const micBtn = document.getElementById('mic-btn');
+        const nextBtn = document.getElementById('next-syllable-btn');
+        const progressText = document.getElementById('progress-text');
+        const historyList = document.getElementById('history-list');
+
+        // --- AUTHENTIFICATION ---
+        const initAuth = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (err) {
+                console.error("Auth error", err);
+            }
+        };
+
+        onAuthStateChanged(auth, (u) => {
+            user = u;
+            if (user) {
+                screens.loading.classList.add('hidden');
+                screens.input.classList.remove('hidden');
+                loadHistory();
+            }
+        });
+
+        initAuth();
+
+        // --- LOGIQUE SYLLABIQUE ---
+        function getSyllables(text) {
+            const words = text.split(/\s+/);
+            let res = [];
+            words.forEach(w => {
+                const s = w.match(/[^aeiouyàâéèêëîïôûù]*[aeiouyàâéèêëîïôûù]+(?:[^aeiouyàâéèêëîïôûù](?![aeiouyàâéèêëîïôûù]))*/gi) || [w];
+                res.push(...s);
+            });
+            return res;
+        }
+
+        // --- SAUVEGARDE CLOUD ---
+        async function saveToCloud() {
+            if (!user) return;
+            const saveStatus = document.getElementById('save-status');
+            saveStatus.innerText = "Sauvegarde en cours...";
+            
+            try {
+                // Conversion des audios en base64 pour Firestore
+                const audioPromises = recordings.map(blob => {
+                    return new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result);
+                        reader.readAsDataURL(blob);
+                    });
+                });
+
+                const base64Audios = await Promise.all(audioPromises);
+
+                const sessionData = {
+                    phrase: phraseInput.value,
+                    syllables: currentSyllables,
+                    audios: base64Audios,
+                    timestamp: Date.now()
+                };
+
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'sessions'), sessionData);
+                saveStatus.innerText = "Sauvegardé dans le cloud";
+            } catch (e) {
+                console.error("Error saving", e);
+                saveStatus.innerText = "Erreur de sauvegarde";
+            }
+        }
+
+        async function loadHistory() {
+            if (!user) return;
+            const q = collection(db, 'artifacts', appId, 'users', user.uid, 'sessions');
+            const querySnapshot = await getDocs(q);
+            historyList.innerHTML = '';
+            
+            const docs = [];
+            querySnapshot.forEach(doc => docs.push({id: doc.id, ...doc.data()}));
+            
+            // Tri simple en mémoire
+            docs.sort((a,b) => b.timestamp - a.timestamp).forEach(data => {
+                const div = document.createElement('div');
+                div.className = "p-3 bg-white border rounded-lg flex justify-between items-center hover:border-blue-300 cursor-pointer transition-all";
+                div.innerHTML = `
+                    <span class="truncate pr-4 font-medium">${data.phrase}</span>
+                    <span class="text-[10px] text-slate-400 whitespace-nowrap">${new Date(data.timestamp).toLocaleDateString()}</span>
+                `;
+                div.onclick = () => loadSession(data);
+                historyList.appendChild(div);
+            });
+        }
+
+        async function loadSession(data) {
+            currentSyllables = data.syllables;
+            phraseInput.value = data.phrase;
+            
+            // Reconvertir base64 en blobs
+            const blobPromises = data.audios.map(async (b64) => {
+                const res = await fetch(b64);
+                return res.blob();
+            });
+            recordings = await Promise.all(blobPromises);
+            
+            initPlayScreen();
+            screens.input.classList.add('hidden');
+            document.getElementById('save-status').innerText = "Session chargée";
+        }
+
+        // --- NAVIGATION ET UI ---
+        phraseInput.oninput = () => {
+            const ok = phraseInput.value.trim().length > 2;
+            startBtn.disabled = !ok;
+            startBtn.className = ok ? "w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all" : "w-full bg-slate-100 text-slate-400 font-bold py-4 rounded-xl transition-all";
+        };
+
+        startBtn.onclick = () => {
+            currentSyllables = getSyllables(phraseInput.value);
+            recordings = new Array(currentSyllables.length).fill(null);
+            currentStep = 0;
+            updateRecordScreen();
+            screens.input.classList.add('hidden');
+            screens.record.classList.remove('hidden');
+        };
+
+        function updateRecordScreen() {
+            curSyllableDisplay.innerText = currentSyllables[currentStep];
+            progressText.innerText = `${currentStep + 1} / ${currentSyllables.length}`;
+            nextBtn.disabled = !recordings[currentStep];
+            nextBtn.innerText = currentStep === currentSyllables.length - 1 ? "Terminer et sauvegarder" : "Syllabe suivante";
+            nextBtn.className = !nextBtn.disabled ? "w-full bg-blue-600 text-white font-bold py-4 rounded-xl" : "w-full bg-slate-200 text-slate-500 font-bold py-4 rounded-xl";
+            document.getElementById('recording-done-icon').classList.toggle('hidden', !recordings[currentStep]);
+        }
+
+        micBtn.onclick = async () => {
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+                mediaRecorder.stop();
+                return;
+            }
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+            mediaRecorder.onstop = () => {
+                recordings[currentStep] = new Blob(audioChunks, { type: 'audio/wav' });
+                micBtn.classList.remove('recording-glow');
+                document.getElementById('mic-icon').classList.remove('hidden');
+                document.getElementById('stop-icon').classList.add('hidden');
+                document.getElementById('record-status-ui').classList.add('hidden');
+                updateRecordScreen();
+            };
+            mediaRecorder.start();
+            micBtn.classList.add('recording-glow');
+            document.getElementById('mic-icon').classList.add('hidden');
+            document.getElementById('stop-icon').classList.remove('hidden');
+            document.getElementById('record-status-ui').classList.remove('hidden');
+        };
+
+        nextBtn.onclick = async () => {
+            if (currentStep < currentSyllables.length - 1) {
+                currentStep++;
+                updateRecordScreen();
+            } else {
+                initPlayScreen();
+                await saveToCloud();
+                loadHistory(); // Rafraîchir la liste en arrière-plan
+            }
+        };
+
+        function initPlayScreen() {
+            const grid = document.getElementById('syllables-grid');
+            grid.innerHTML = '';
+            currentSyllables.forEach((s, i) => {
+                const div = document.createElement('div');
+                div.className = 'syllable-card bg-white border-2 border-slate-200 p-4 rounded-xl min-w-[70px] flex items-center justify-center text-xl font-bold text-slate-700';
+                div.innerText = s.toLowerCase();
+                div.id = `play-syllable-${i}`;
+                grid.appendChild(div);
+            });
+            screens.record.classList.add('hidden');
+            screens.play.classList.remove('hidden');
+        }
+
+        const speedRange = document.getElementById('speed-range');
+        speedRange.oninput = () => document.getElementById('speed-display').innerText = speedRange.value + 'x';
+
+        document.getElementById('play-full-btn').onclick = async () => {
+            const speed = parseFloat(speedRange.value);
+            for (let i = 0; i < recordings.length; i++) {
+                document.querySelectorAll('.syllable-card').forEach(c => c.classList.remove('active'));
+                document.getElementById(`play-syllable-${i}`).classList.add('active');
+                await playAudioBlob(recordings[i], speed);
+                document.getElementById(`play-syllable-${i}`).classList.remove('active');
+            }
+        };
+
+        function playAudioBlob(blob, speed) {
+            return new Promise((resolve) => {
+                const url = URL.createObjectURL(blob);
+                const audio = new Audio(url);
+                audio.playbackRate = speed;
+                audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+                audio.play();
+            });
+        }
+
+        document.getElementById('back-to-start').onclick = () => {
+            screens.play.classList.add('hidden');
+            screens.input.classList.remove('hidden');
+            phraseInput.value = '';
+            startBtn.disabled = true;
+        };
+    </script>
+</body>
+</html>

@@ -136,11 +136,15 @@
         import { getFirestore, collection, addDoc, getDocs, doc, setDoc, query, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- FIREBASE CONFIG ---
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'syllabo-reader';
+        const firebaseConfig = {
+  apiKey: "AIzaSyAJ3nyGHvSeNy-1eKkinDn_U12GAjfy1xM",
+  authDomain: "syllaboreader.firebaseapp.com",
+  projectId: "syllaboreader",
+  storageBucket: "syllaboreader.firebasestorage.app",
+  messagingSenderId: "171990686764",
+  appId: "1:171990686764:web:9bdff27442667b2a4f8589",
+  measurementId: "G-BDDF19MXHZ"
+};
 
         // --- ÉTATS ---
         let user = null;
